@@ -797,7 +797,7 @@ def showQRPopup():
 
 
     url = (
-        "https://pilahsampah.com/transaction/"
+        "https://pilah.agsspr.my.id//transaction/"
         f"?code={trxId}"
         f"&date={date_now}"
         f"&point={saldo}"
