@@ -1,0 +1,22 @@
+Update yang harus dilakukan
+* buat automate Trx dan wd
+* Tidak boleh duplicate
+
+*** Issue Severity Impact ***
+TID duplikat no error message	🔴 CRITICAL	User tidak tahu poin gagal
+Tidak ada admin dashboard	🟠 HIGH	Admin operasional jadi susah
+Rate limit tidak ada feedback	🟠 HIGH	User bingung form error
+Data sync inconsistency	🟠 HIGH	Poin user bisa mismatch
+Hook failure no recovery	🟡 MEDIUM	Data bisa orphaned
+
+
+*** ALUR SUBMIT DATA ***
+Forminator Submit
+    ↓
+wp_frmt_form_entry* + wp_frmt_form_entry_meta*
+    ↓
+Hook forminator_form_after_save_entry
+    ↓
+pilah_transaction + pilah_point + pilah_voucher (jika withdraw)
+    ↓
+pilah_audit_log + pilah_rate_limit + wp_usermeta (sync)
