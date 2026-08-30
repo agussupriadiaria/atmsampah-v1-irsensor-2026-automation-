@@ -1,3 +1,5 @@
+# update ukuran layar dengan yang terbaru
+
 from tkinter import *
 from PIL import Image, ImageDraw, ImageTk, ImageFont
 import RPi.GPIO as GPIO
@@ -10,19 +12,23 @@ from datetime import datetime
 
 
 # ================= KONFIGURASI GPIO =================
+
 BUTTON_PIN1 = 27  # botol
 BUTTON_PIN2 = 22  # tutup botol
-OUTPUT_PIN  = 6   # output ke arduino
+OUTPUT_PIN = 6    # output ke arduino
 START_PIN = 5     # button mulai
+EMERGENCY_PIN = 16  # emergency button
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(BUTTON_PIN1, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(BUTTON_PIN2, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 GPIO.setup(OUTPUT_PIN, GPIO.OUT, initial=GPIO.HIGH)
 GPIO.setup(START_PIN, GPIO.OUT, initial=GPIO.LOW)
+GPIO.setup(EMERGENCY_PIN, GPIO.OUT, initial=GPIO.LOW)
 
 
 # ================= KONFIGURASI TAMPILAN =================
+
 SAVE_PATH = "/home/aria/Desktop/atmsampah-v1-irsensor-2026/saveData.txt"
 
 POIN_PER_BOTOL = 50
@@ -36,6 +42,7 @@ trxId = None
 
 
 # ================= SIGNAL HANDLER =================
+
 def signal_handler(signum, frame):
     try:
         closeWindow()
@@ -49,17 +56,20 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 # ================= BACKGROUND =================
+
 def create_gradient_background(width, height):
     """
     Buat background image dengan gradient hijau.
     Dari bright green (#00FF00) ke hijau lebih gelap (#006600) vertikal.
     """
+
     img = Image.new('RGB', (width, height))
     pixels = img.load()
 
-    # Warna gradasi
-    start_color = (0, 255, 0)
-    end_color = (0, 102, 0)
+    # Warna gradasi:
+    # dari bright green di atas ke dark green di bawah
+    start_color = (0, 255, 0)      # Bright green (#00FF00)
+    end_color = (0, 102, 0)        # Dark green (#006600)
 
     for y in range(height):
         # Hitung ratio (0 sampai 1)
@@ -77,7 +87,121 @@ def create_gradient_background(width, height):
     return img
 
 
-# ================= CUSTOM BUTTON =================
+# ================= FONT =================
+
+def _load_font(size):
+    """
+    Coba pakai font TrueType agar teks tombol besar tetap proporsional,
+    fallback ke font default kalau tidak tersedia di sistem.
+    """
+
+    candidates = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ]
+
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+
+    return ImageFont.load_default()
+
+
+# ================= ICON SEDERHANA =================
+
+# Icon dibuat langsung dengan PIL agar tidak membutuhkan file gambar eksternal.
+# Ukurannya kecil sehingga ringan untuk Raspberry Pi.
+
+def create_point_icon(size):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    pad = max(2, size // 12)
+    d.ellipse(
+        [pad, pad, size - pad, size - pad],
+        fill="#f2c94c",
+        outline="#b8860b",
+        width=max(2, size // 14)
+    )
+
+    fnt = _load_font(max(10, int(size * 0.48)))
+    text = "P"
+    bbox = d.textbbox((0, 0), text, font=fnt)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+
+    d.text(
+        ((size - tw) // 2, (size - th) // 2 - max(1, size // 20)),
+        text,
+        font=fnt,
+        fill="#8a6500"
+    )
+
+    return ImageTk.PhotoImage(img)
+
+
+def create_cap_icon(size):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    d.rounded_rectangle(
+        [int(size * 0.16), int(size * 0.28), int(size * 0.84), int(size * 0.74)],
+        radius=max(3, size // 10),
+        fill="#555555"
+    )
+
+    line_w = max(2, size // 14)
+    for ratio in (0.40, 0.53, 0.66):
+        y = int(size * ratio)
+        d.line(
+            [int(size * 0.24), y, int(size * 0.76), y],
+            fill="white",
+            width=line_w
+        )
+
+    return ImageTk.PhotoImage(img)
+
+
+def create_bottle_icon(size):
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+
+    # Tutup botol
+    d.rectangle(
+        [int(size * 0.38), int(size * 0.08), int(size * 0.62), int(size * 0.18)],
+        fill="#333333"
+    )
+
+    # Leher botol
+    d.rounded_rectangle(
+        [int(size * 0.40), int(size * 0.16), int(size * 0.60), int(size * 0.38)],
+        radius=max(2, size // 16),
+        fill="#555555"
+    )
+
+    # Badan botol
+    d.rounded_rectangle(
+        [int(size * 0.27), int(size * 0.34), int(size * 0.73), int(size * 0.90)],
+        radius=max(4, size // 10),
+        fill="#777777",
+        outline="#444444",
+        width=max(2, size // 18)
+    )
+
+    # Garis sederhana pada badan botol
+    d.line(
+        [int(size * 0.34), int(size * 0.54), int(size * 0.66), int(size * 0.54)],
+        fill="white",
+        width=max(2, size // 18)
+    )
+
+    return ImageTk.PhotoImage(img)
+
+
+# ================= BUTTON =================
+
 def makeBtn(
     parent,
     text,
@@ -88,8 +212,10 @@ def makeBtn(
     y,
     w=110,
     h=50,
-    bg_color="white"
+    bg_color="white",
+    font_size=None
 ):
+
     cvs = Canvas(
         parent,
         width=w,
@@ -101,17 +227,21 @@ def makeBtn(
 
     cvs.place(x=x, y=y)
 
+    # Ukuran font dibuat 1/3 dari ukuran semula
+    if font_size is None:
+        font_size = max(4, int(h * 0.22))  # Diubah dari 0.32 menjadi 0.11 (sekitar 1/3)
+
     def draw(c):
         img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
         d = ImageDraw.Draw(img)
 
         d.rounded_rectangle(
             [0, 0, w, h],
-            radius=10,
+            radius=14,
             fill=c
         )
 
-        fnt = ImageFont.load_default()
+        fnt = _load_font(font_size)
 
         bbox = d.textbbox(
             (0, 0),
@@ -176,12 +306,23 @@ def makeBtn(
     return cvs
 
 
+# ================= EMERGENCY BUTTON =================
+
+def emergency_press(event=None):
+    GPIO.output(EMERGENCY_PIN, GPIO.HIGH)
+    print("[EMERGENCY] GPIO 16 = HIGH")
+
+
+def emergency_release(event=None):
+    GPIO.output(EMERGENCY_PIN, GPIO.LOW)
+    print("[EMERGENCY] GPIO 16 = LOW")
+
+
 # ================= MAIN PAGE =================
+
 def mainPage():
 
-    global root
-    global timeStamp
-    global dateStamp
+    global root, timeStamp, dateStamp
 
     global saldoLabel
     global trxIdLabel
@@ -194,6 +335,7 @@ def mainPage():
     root = Tk()
 
     # ===== SETUP FULLSCREEN UNTUK RPi =====
+
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
 
@@ -222,7 +364,8 @@ def mainPage():
     )
 
 
-    # ================= GRADIENT BACKGROUND =================
+    # === CREATE GRADIENT BACKGROUND ===
+
     gradient_img = create_gradient_background(
         screen_width,
         screen_height
@@ -248,6 +391,7 @@ def mainPage():
 
 
     # ================= TITLE =================
+
     titleLabel = Label(
         bg_label,
         text="UB GREENCAMPUS",
@@ -266,6 +410,7 @@ def mainPage():
 
 
     # ================= MAIN FRAME =================
+
     mainFrame = Frame(
         root,
         bd=10,
@@ -287,7 +432,8 @@ def mainPage():
     frame_h = mainFrame.winfo_height()
 
 
-    # ================= STAMP =================
+    # ================= STAMP KIRI ATAS =================
+
     stampFrame = Frame(
         mainFrame,
         bg="white",
@@ -354,29 +500,145 @@ def mainPage():
     )
 
 
-    # ================= UKURAN CARD =================
-    card_w = int(frame_w * 0.38)
+    # ===================================================================
+    # LAYOUT:
+    #
+    #   - Kartu "Total Saldo" & "Data" di sisi kanan
+    #   - Tombol "Mulai" & "E-Struk" di sisi kiri
+    #
+    # Tombol dibuat 75% dari tinggi kartu dan tetap center
+    # secara vertikal terhadap kartu.
+    # ===================================================================
 
-    card_h = 260
-
-    gap = int(frame_w * 0.04)
-
-    total_w = card_w * 2 + gap
-
-    card_y = (
-        frame_h - card_h - 100
-    ) // 2 + 20
-
-    left_x = (
-        frame_w - total_w
-    ) // 2
-
-    right_x = (
-        left_x + card_w + gap
+    gap_between_sides = int(
+        frame_w * 0.05
     )
 
 
-    # ================= CARD KIRI =================
+    # ================= UKURAN BLOK =================
+
+    target_block_h = int(
+        frame_h * 0.78
+    )
+
+    row_gap = max(
+        18,
+        int(frame_h * 0.035)
+    )
+
+    card_w = int(
+        frame_w * 0.38
+    )
+
+    # Dua kartu di kanan
+    card_h = (
+        target_block_h - row_gap
+    ) // 2
+
+
+    # ================= UKURAN TOMBOL =================
+    # Tiga tombol dibuat sama besar dan sejajar vertikal.
+
+    btn_w = min(
+        int(frame_w * 0.30),
+        340
+    )
+
+    btn_h = (
+        target_block_h - (row_gap * 2)
+    ) // 3
+
+
+    # ================= POSISI HORIZONTAL =================
+
+    total_w = (
+        btn_w
+        + gap_between_sides
+        + card_w
+    )
+
+    left_edge_x = (
+        frame_w - total_w
+    ) // 2
+
+    btn_x = left_edge_x
+
+    cards_x = (
+        left_edge_x
+        + btn_w
+        + gap_between_sides
+    )
+
+
+    # ================= POSISI VERTIKAL =================
+
+    block_start_y = (
+        frame_h - target_block_h
+    ) // 2
+
+    row1_y = block_start_y
+
+    row2_y = (
+        block_start_y
+        + card_h
+        + row_gap
+    )
+
+    # Tiga tombol kiri dibuat sejajar dengan jarak yang sama.
+    mulai_y = block_start_y
+
+    estruk_y = (
+        mulai_y
+        + btn_h
+        + row_gap
+    )
+
+    emergency_y = (
+        estruk_y
+        + btn_h
+        + row_gap
+    )
+
+    saldo_y = row1_y
+    data_y = row2_y
+
+
+    # ================= FONT KARTU =================
+
+    f_title = max(
+        13,
+        int(card_h * 0.075)
+    )
+
+    f_value = max(
+        20,
+        int(card_h * 0.115)
+    )
+
+    f_datalabel = max(
+        11,
+        int(card_h * 0.05)
+    )
+
+    f_datavalue = (
+        f_datalabel + 2
+    )
+
+    row_step = int(
+        card_h * 0.155
+    )
+
+    row0_off = int(
+        card_h * 0.20
+    )
+
+    value_col_x = int(
+        card_w * 0.50
+    )
+
+
+    # ================= CARD TOTAL SALDO =================
+
     saldoFrame = Frame(
         mainFrame,
         bg="white",
@@ -387,49 +649,80 @@ def mainPage():
     )
 
     saldoFrame.place(
-        x=left_x,
-        y=card_y
+        x=cards_x,
+        y=saldo_y
     )
 
-    saldoFrame.pack_propagate(False)
+    saldoFrame.pack_propagate(
+        False
+    )
 
     Label(
         saldoFrame,
         bg="white",
         text="TOTAL SALDO",
-        font=("Helvetica", 15, "bold")
+        font=(
+            "Helvetica",
+            f_title,
+            "bold"
+        )
     ).place(
         relx=0.5,
-        y=18,
+        rely=0.09,
+        anchor=CENTER
+    )
+
+    # Logo poin sederhana
+    point_icon_size = max(34, min(58, int(card_h * 0.16)))
+    point_icon = create_point_icon(point_icon_size)
+
+    point_icon_label = Label(
+        saldoFrame,
+        image=point_icon,
+        bg="white"
+    )
+    point_icon_label.image = point_icon
+    point_icon_label.place(
+        relx=0.18,
+        rely=0.55,
         anchor=CENTER
     )
 
     Label(
         saldoFrame,
         text="Poin",
-        font=("Helvetica", 28, "bold"),
+        font=(
+            "Helvetica",
+            f_value,
+            "bold"
+        ),
         bg="white"
     ).place(
-        relx=0.28,
-        rely=0.5,
+        relx=0.38,
+        rely=0.55,
         anchor=CENTER
     )
 
     saldoLabel = Label(
         saldoFrame,
         text="0",
-        font=("Helvetica", 28, "bold"),
+        font=(
+            "Helvetica",
+            f_value,
+            "bold"
+        ),
         bg="white"
     )
 
     saldoLabel.place(
-        relx=0.65,
-        rely=0.5,
+        relx=0.68,
+        rely=0.55,
         anchor=CENTER
     )
 
 
-    # ================= CARD KANAN =================
+    # ================= CARD DATA =================
+
     dataFrame = Frame(
         mainFrame,
         bg="white",
@@ -440,31 +733,40 @@ def mainPage():
     )
 
     dataFrame.place(
-        x=right_x,
-        y=card_y
+        x=cards_x,
+        y=data_y
     )
 
-    dataFrame.pack_propagate(False)
+    dataFrame.pack_propagate(
+        False
+    )
 
     Label(
         dataFrame,
         bg="white",
         text="DATA",
-        font=("Helvetica", 15, "bold")
+        font=(
+            "Helvetica",
+            f_title,
+            "bold"
+        )
     ).place(
         relx=0.5,
-        y=18,
+        rely=0.09,
         anchor=CENTER
     )
 
+
+    # ================= LABEL DATA =================
+
+    data_label_x = int(card_w * 0.12)
+    icon_x = int(card_w * 0.025)
 
     for i, txt in enumerate(
         [
             "TID",
             "Jumlah Botol",
-            "Status Transaksi",
-            "Tutup",
-            "Botol"
+            "Status Transaksi"
         ]
     ):
 
@@ -472,23 +774,90 @@ def mainPage():
             dataFrame,
             bg="white",
             text=txt,
-            font=("Helvetica", 11, "bold")
+            font=(
+                "Helvetica",
+                f_datalabel,
+                "bold"
+            )
         ).place(
-            x=20,
-            y=53 + i * 40
+            x=data_label_x,
+            y=row0_off + i * row_step
         )
 
+    # Logo tutup dan botol dibuat langsung dengan PIL agar ringan.
+    data_icon_size = max(24, min(38, int(card_h * 0.105)))
+
+    cap_icon = create_cap_icon(data_icon_size)
+    cap_icon_label = Label(
+        dataFrame,
+        image=cap_icon,
+        bg="white"
+    )
+    cap_icon_label.image = cap_icon
+    cap_icon_label.place(
+        x=icon_x,
+        y=row0_off + row_step * 3 + (f_datavalue // 2),
+        anchor="w"
+    )
+
+    Label(
+        dataFrame,
+        bg="white",
+        text="Tutup",
+        font=(
+            "Helvetica",
+            f_datalabel,
+            "bold"
+        )
+    ).place(
+        x=data_label_x,
+        y=row0_off + row_step * 3
+    )
+
+    bottle_icon = create_bottle_icon(data_icon_size)
+    bottle_icon_label = Label(
+        dataFrame,
+        image=bottle_icon,
+        bg="white"
+    )
+    bottle_icon_label.image = bottle_icon
+    bottle_icon_label.place(
+        x=icon_x,
+        y=row0_off + row_step * 4 + (f_datavalue // 2),
+        anchor="w"
+    )
+
+    Label(
+        dataFrame,
+        bg="white",
+        text="Botol",
+        font=(
+            "Helvetica",
+            f_datalabel,
+            "bold"
+        )
+    ).place(
+        x=data_label_x,
+        y=row0_off + row_step * 4
+    )
+
+
+    # ================= VALUE DATA =================
 
     trxIdLabel = Label(
         dataFrame,
         bg="white",
         text="-----",
-        font=("Helvetica", 14, "bold")
+        font=(
+            "Helvetica",
+            f_datavalue,
+            "bold"
+        )
     )
 
     trxIdLabel.place(
-        x=170,
-        y=51
+        x=value_col_x,
+        y=row0_off
     )
 
 
@@ -496,12 +865,16 @@ def mainPage():
         dataFrame,
         bg="white",
         text="0",
-        font=("Helvetica", 14, "bold")
+        font=(
+            "Helvetica",
+            f_datavalue,
+            "bold"
+        )
     )
 
     jumlahLabel.place(
-        x=170,
-        y=91
+        x=value_col_x,
+        y=row0_off + row_step
     )
 
 
@@ -509,13 +882,17 @@ def mainPage():
         dataFrame,
         bg="white",
         text="TIDAK AKTIF",
-        font=("Helvetica", 14, "bold"),
+        font=(
+            "Helvetica",
+            f_datavalue,
+            "bold"
+        ),
         fg="red"
     )
 
     statusLabel.place(
-        x=170,
-        y=131
+        x=value_col_x,
+        y=row0_off + row_step * 2
     )
 
 
@@ -523,12 +900,16 @@ def mainPage():
         dataFrame,
         bg="white",
         text="0",
-        font=("Helvetica", 14, "bold")
+        font=(
+            "Helvetica",
+            f_datavalue,
+            "bold"
+        )
     )
 
     sensor1Label.place(
-        x=170,
-        y=171
+        x=value_col_x,
+        y=row0_off + row_step * 3
     )
 
 
@@ -536,111 +917,75 @@ def mainPage():
         dataFrame,
         bg="white",
         text="0",
-        font=("Helvetica", 14, "bold")
+        font=(
+            "Helvetica",
+            f_datavalue,
+            "bold"
+        )
     )
 
     sensor2Label.place(
-        x=170,
-        y=211
+        x=value_col_x,
+        y=row0_off + row_step * 4
     )
 
 
     # ================= TOMBOL =================
-    btn_w = 110
-    btn_h = 50
-    spacing = 16
 
-    btn_y = (
-        card_y + card_h + 18
-    )
-
-
-    # SEKARANG ADA 3 BUTTON
-    total_btn_w = (
-        btn_w * 3 +
-        spacing * 2
-    )
-
-
-    start_x0 = (
-        left_x +
-        (total_w - total_btn_w) // 2
-    )
-
-
-    # Posisi masing-masing tombol
-    simulasi_x = start_x0
-
-    mulai_x = (
-        simulasi_x +
-        btn_w +
-        spacing
-    )
-
-    estruk_x = (
-        mulai_x +
-        btn_w +
-        spacing
-    )
-
-
-    # ================= BUTTON TAMBAH TRX =================
-    makeBtn(
-        mainFrame,
-        "Tambah TRX",
-        "#0066cc",
-        "#0088ff",
-        addSimulationTransaction,
-        simulasi_x,
-        btn_y,
-        btn_w,
-        btn_h,
-        bg_color="white"
-    )
-
-
-    # ================= BUTTON MULAI =================
     makeBtn(
         mainFrame,
         "Mulai",
         "#1a7f37",
         "#28a745",
         startPulse,
-        mulai_x,
-        btn_y,
+        btn_x,
+        mulai_y,
         btn_w,
         btn_h,
         bg_color="white"
     )
 
-
-    # ================= BUTTON E-STRUK =================
     makeBtn(
         mainFrame,
         "E-Struk",
         "#b8860b",
         "#e0a721",
         resetCounter,
-        estruk_x,
-        btn_y,
+        btn_x,
+        estruk_y,
         btn_w,
         btn_h,
         bg_color="white"
     )
 
+    # ================= TOMBOL EMERGENCY =================
+    # GPIO 16 HIGH selama tombol ditekan, LOW saat dilepas.
 
-    # ================= LIFT =================
+    emergencyBtn = makeBtn(
+        mainFrame,
+        "Emergency",
+        "#cc0000",
+        "#ff3333",
+        lambda: None,
+        btn_x,
+        emergency_y,
+        btn_w,
+        btn_h,
+        bg_color="white"
+    )
+
+    emergencyBtn.bind("<ButtonPress-1>", emergency_press)
+    emergencyBtn.bind("<ButtonRelease-1>", emergency_release)
+
+
     mainFrame.lift()
     stampFrame.lift()
     saldoFrame.lift()
     dataFrame.lift()
 
 
-    # ================= UPDATE TIME =================
     updateTime()
-
     updateDate()
-
     userIDNum()
 
 
@@ -658,10 +1003,10 @@ def userIDNum():
         100000
     )
 
-    trxIdLabel["text"] = str(trxId)
+    trxIdLabel["text"] = str(
+        trxId
+    )
 
-
-# ================= TRANSAKSI BOTOL ASLI =================
 
 def bottleCounter():
     """
@@ -669,8 +1014,7 @@ def bottleCounter():
     (tombol 1 & 2) aktif bersamaan.
     """
 
-    global bottle
-    global saldo
+    global bottle, saldo
 
     bottle += 1
 
@@ -689,94 +1033,37 @@ def bottleCounter():
     )
 
 
-# ================= TRANSAKSI SIMULASI =================
-
-def addSimulationTransaction():
-    """
-    Simulasi transaksi tanpa menggunakan sensor GPIO.
-
-    Setiap klik:
-    - Tambah 1 botol
-    - Tambah 50 poin
-    - Update tampilan
-    - Simpan transaksi
-    """
-
-    global bottle
-    global saldo
-
-    bottle += 1
-
-    saldo += POIN_PER_BOTOL
-
-    jumlahLabel["text"] = bottle
-
-    saldoLabel["text"] = saldo
-
-    # Status dibuat valid agar terlihat seperti
-    # transaksi botol berhasil.
-    statusLabel.config(
-        text="Valid",
-        fg="green"
-    )
-
-    saveData()
-
-    print(
-        f"[SIMULASI] "
-        f"Jumlah: {bottle}, "
-        f"Saldo: {saldo}, "
-        f"TID: {trxId}"
-    )
-
-
-# ================= RESET / E-STRUK =================
-
 def resetCounter():
     """
     Tombol E-Struk:
+    kirim pulsa START_PIN,
     tampilkan QR untuk sesi berjalan,
     lalu reset untuk pelanggan berikutnya.
     """
 
-    global bottle
-    global saldo
+    global bottle, saldo
 
     if bottle == 0:
-
         print(
             "[E-Struk] Belum ada botol masuk, "
             "tidak ada struk untuk dicetak."
         )
-
         return
 
+    _startPulse(
+        START_PIN
+    )
 
-    # Tampilkan QR
     showQRPopup()
 
-
-    # Reset sesi
     bottle = 0
-
     saldo = 0
-
 
     jumlahLabel["text"] = bottle
 
     saldoLabel["text"] = saldo
 
-
-    # Status kembali tidak aktif
-    statusLabel.config(
-        text="TIDAK AKTIF",
-        fg="red"
-    )
-
-
-    # Buat TID baru
     userIDNum()
-
 
     print(
         "Reset Jumlah Botol dan Saldo "
@@ -784,7 +1071,7 @@ def resetCounter():
     )
 
 
-# ================= QR CODE =================
+# ================= QR POPUP =================
 
 def showQRPopup():
     """
@@ -795,20 +1082,17 @@ def showQRPopup():
         "%d/%m/%Y"
     )
 
-
     url = (
-        "https://pilah.agsspr.my.id//transaction/"
+        f"https://pilahsampah.com/transaction/"
         f"?code={trxId}"
         f"&date={date_now}"
         f"&point={saldo}"
     )
 
-
     qr = qrcode.QRCode(
         box_size=6,
         border=4
     )
-
 
     qr.add_data(url)
 
@@ -816,14 +1100,12 @@ def showQRPopup():
         fit=True
     )
 
-
     qr_img = qr.make_image(
         fill_color="black",
         back_color="white"
     )
 
 
-    # ================= OVERLAY =================
     overlay = Frame(
         root,
         bg="white",
@@ -832,7 +1114,6 @@ def showQRPopup():
         highlightthickness=2
     )
 
-
     overlay.place(
         relx=0.5,
         rely=0.5,
@@ -840,7 +1121,6 @@ def showQRPopup():
         width=400,
         height=460
     )
-
 
     overlay.lift()
 
@@ -866,11 +1146,9 @@ def showQRPopup():
     )
 
 
-    # ================= QR IMAGE =================
     tk_img = ImageTk.PhotoImage(
         qr_img
     )
-
 
     qr_label = Label(
         overlay,
@@ -878,16 +1156,13 @@ def showQRPopup():
         bg="white"
     )
 
-
     qr_label.image = tk_img
-
 
     qr_label.pack(
         pady=10
     )
 
 
-    # ================= BUTTON TUTUP =================
     Button(
         overlay,
         text="Tutup",
@@ -901,12 +1176,10 @@ def showQRPopup():
     )
 
 
-    # Auto close 20 detik
     overlay.after(
         20000,
         overlay.destroy
     )
-
 
     print(
         f"[QR] URL: {url}"
@@ -928,7 +1201,6 @@ def saveData():
         "%Y-%m-%d"
     )
 
-
     try:
 
         with open(
@@ -944,16 +1216,15 @@ def saveData():
                 f"{saldo}\n"
             )
 
-
     except Exception as e:
 
         print(
-            f"[saveData] "
-            f"Gagal menyimpan data lokal: {e}"
+            f"[saveData] Gagal menyimpan "
+            f"data lokal: {e}"
         )
 
 
-# ================= GPIO PULSE UNTUK TOMBOL MULAI =================
+# ================= GPIO PULSE UNTUK TOMBOL =================
 
 def startPulse():
 
@@ -969,15 +1240,12 @@ def _startPulse(pin):
     if start_busy:
         return
 
-
     start_busy = True
-
 
     GPIO.output(
         pin,
         GPIO.HIGH
     )
-
 
     root.after(
         500,
@@ -1029,7 +1297,6 @@ def pollButtons():
 
     global last_state
 
-
     state1 = GPIO.input(
         BUTTON_PIN1
     )
@@ -1037,7 +1304,6 @@ def pollButtons():
     state2 = GPIO.input(
         BUTTON_PIN2
     )
-
 
     output = (
         state1 == GPIO.LOW
@@ -1047,16 +1313,11 @@ def pollButtons():
 
 
     sensor1Val = (
-        1
-        if state1 == GPIO.LOW
-        else 0
+        1 if state1 == GPIO.LOW else 0
     )
 
-
     sensor2Val = (
-        1
-        if state2 == GPIO.LOW
-        else 0
+        1 if state2 == GPIO.LOW else 0
     )
 
 
@@ -1072,7 +1333,6 @@ def pollButtons():
     if output != last_state:
 
         last_state = output
-
 
         if output:
 
@@ -1093,11 +1353,8 @@ def pollButtons():
 
     GPIO.output(
         OUTPUT_PIN,
-        GPIO.LOW
-        if output
-        else GPIO.HIGH
+        GPIO.LOW if output else GPIO.HIGH
     )
-
 
     root.after(
         50,
@@ -1122,6 +1379,11 @@ def closeWindow():
         GPIO.LOW
     )
 
+    GPIO.output(
+        EMERGENCY_PIN,
+        GPIO.LOW
+    )
+
     GPIO.cleanup()
 
     root.destroy()
@@ -1132,8 +1394,8 @@ def closeWindow():
 print("=" * 60)
 
 print(
-    "ATM SAMPAH - Starting "
-    "with Green Gradient Background..."
+    "ATM SAMPAH - Starting with "
+    "Green Gradient Background..."
 )
 
 print("=" * 60)
@@ -1141,17 +1403,14 @@ print("=" * 60)
 
 mainPage()
 
-
 root.after(
     50,
     pollButtons
 )
 
-
 root.protocol(
     "WM_DELETE_WINDOW",
     closeWindow
 )
-
 
 root.mainloop()
