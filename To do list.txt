@@ -20,3 +20,6 @@ Hook forminator_form_after_save_entry
 pilah_transaction + pilah_point + pilah_voucher (jika withdraw)
     ↓
 pilah_audit_log + pilah_rate_limit + wp_usermeta (sync)
+
+
+* form id di forminator id nya sudah tercatat di plugin pilah plugin. jadi tidak bisa ganti2 id sembarangan
