@@ -62,7 +62,7 @@ Cek frontend: Refresh profile → harus tampil "Your Point: 50"
 - Frontend tampil point yang benar
 
 
-////////////////// EDIT POINT USER DENGAN LOG //////////////////
+////////////////// EDIT POINT PER USER DENGAN LOG //////////////////
 START TRANSACTION;  ← MULAI TRANSACTION
 
 -- STEP 1: Insert ke pilah_transaction
@@ -86,3 +86,76 @@ VALUES
 
 COMMIT;  ← COMMIT JIKA SEMUA BERHASIL
 -- Jika ada error, database auto-ROLLBACK
+
+
+
+////////////////// EDIT POINT ALL USER DENGAN LOG //////////////////
+START TRANSACTION;
+
+-- 1. Update wp_usermeta (hanya untuk yang saat ini nilainya 0)
+UPDATE wp_usermeta um
+INNER JOIN wp_users u ON um.user_id = u.ID
+SET um.meta_value = u.point
+WHERE u.ID BETWEEN 11 AND 57
+  AND um.meta_key = 'pilah_balance'
+  AND um.meta_value = '0'
+  AND u.point != 0;  -- agar tidak mengupdate ke 0
+
+-- 2. Update / Insert pilah_point (sinkron dengan wp_users.point)
+INSERT INTO pilah_point (user_id, balance, updated_at)
+SELECT u.ID, u.point, NOW()
+FROM wp_users u
+WHERE u.ID BETWEEN 11 AND 57
+  AND u.point != 0
+ON DUPLICATE KEY UPDATE
+    balance = VALUES(balance),
+    updated_at = VALUES(updated_at);
+
+-- 3. Catat transaksi ke pilah_transaction
+--    Hanya untuk user yang memenuhi syarat (pilah_balance sebelumnya 0)
+INSERT INTO pilah_transaction
+(user_id, type, category, amount, balance_before, balance_after, status, tid, created_at, notes)
+SELECT
+    u.ID,
+    'credit',
+    'topup',
+    u.point,
+    0,
+    u.point,
+    'completed',
+    CONCAT('ADMIN-SYNC-', u.ID),
+    NOW(),
+    'Manual sync from wp_users.point (pilah_balance was 0)'
+FROM wp_users u
+WHERE u.ID BETWEEN 11 AND 57
+  AND u.point != 0
+  AND EXISTS (
+      SELECT 1 FROM wp_usermeta um
+      WHERE um.user_id = u.ID
+        AND um.meta_key = 'pilah_balance'
+        AND um.meta_value = '0'
+  );
+
+-- 4. Catat log ke pilah_audit_log
+INSERT INTO pilah_audit_log
+(user_id, action, entity_type, entity_id, old_value, new_value, created_at, user_agent)
+SELECT
+    u.ID,
+    'balance_adjusted',
+    'pilah_point',
+    u.ID,
+    JSON_OBJECT('balance', '0'),
+    JSON_OBJECT('balance', u.point),
+    NOW(),
+    'admin-manual-sync'
+FROM wp_users u
+WHERE u.ID BETWEEN 11 AND 57
+  AND u.point != 0
+  AND EXISTS (
+      SELECT 1 FROM wp_usermeta um
+      WHERE um.user_id = u.ID
+        AND um.meta_key = 'pilah_balance'
+        AND um.meta_value = '0'
+  );
+
+COMMIT;
