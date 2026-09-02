@@ -993,19 +993,28 @@ def mainPage():
 
 def userIDNum():
     """
-    Buat TID baru untuk sesi/pelanggan berikutnya.
-    """
+    Buat TID baru dengan format:
+    4 digit tahun + 2 digit bulan + 2 digit tanggal + 6 digit random number
 
+    Contoh:
+    20260902483721
+    """
     global trxId
 
-    trxId = random.randrange(
-        10000,
-        100000
-    )
+    now = datetime.now()
 
-    trxIdLabel["text"] = str(
-        trxId
-    )
+    # 4 digit tahun + 2 digit bulan + 2 digit tanggal
+    date_part = now.strftime("%Y%m%d")
+
+    # 6 digit random number: 100000 - 999999
+    random_part = random.randint(100000, 999999)
+
+    # Gabungkan menjadi 14 digit
+    trxId = f"{date_part}{random_part}"
+
+    trxIdLabel["text"] = trxId
+```
+
 
 
 def bottleCounter():

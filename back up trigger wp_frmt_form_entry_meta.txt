@@ -1,0 +1,72 @@
+BEGIN
+    DECLARE v_user_id          BIGINT UNSIGNED DEFAULT NULL;
+    DECLARE v_point            DECIMAL(10,0)   DEFAULT NULL;
+    DECLARE v_username         VARCHAR(100)    DEFAULT NULL;
+    DECLARE v_transaction_code VARCHAR(100)    DEFAULT NULL;
+    DECLARE v_transaction_date VARCHAR(20)     DEFAULT NULL;
+
+    IF NEW.meta_key = 'hidden-3' AND NEW.meta_value = 'Transactions' THEN
+
+        -- Ambil hidden-1 (user_id)
+        SELECT CAST(meta_value AS UNSIGNED)
+        INTO v_user_id
+        FROM wp_frmt_form_entry_meta
+        WHERE entry_id = NEW.entry_id AND meta_key = 'hidden-1'
+        LIMIT 1;
+
+        -- Ambil hidden-5 (point)
+        SELECT CAST(meta_value AS DECIMAL(10,0))
+        INTO v_point
+        FROM wp_frmt_form_entry_meta
+        WHERE entry_id = NEW.entry_id AND meta_key = 'hidden-5'
+        LIMIT 1;
+
+        -- Ambil hidden-2 (username)
+        SELECT meta_value
+        INTO v_username
+        FROM wp_frmt_form_entry_meta
+        WHERE entry_id = NEW.entry_id AND meta_key = 'hidden-2'
+        LIMIT 1;
+
+        -- Ambil number-1 (transaction_code)
+        SELECT meta_value
+        INTO v_transaction_code
+        FROM wp_frmt_form_entry_meta
+        WHERE entry_id = NEW.entry_id AND meta_key = 'number-1'
+        LIMIT 1;
+
+        -- Ambil date-1 (transaction_date)
+        SELECT meta_value
+        INTO v_transaction_date
+        FROM wp_frmt_form_entry_meta
+        WHERE entry_id = NEW.entry_id AND meta_key = 'date-1'
+        LIMIT 1;
+
+        IF v_user_id IS NOT NULL AND v_point IS NOT NULL THEN
+
+            -- Akumulasi point di wp_users
+            UPDATE wp_users
+            SET point = point + v_point
+            WHERE ID = v_user_id;
+
+            -- Simpan log ke transaction_success
+            INSERT INTO transaction_success
+                (user_id, transaction_code, username, point_added, transaction_date)
+            VALUES
+                (v_user_id, v_transaction_code, v_username, v_point, v_transaction_date);
+
+            -- Masukkan entry_id ke antrian cleanup
+            INSERT IGNORE INTO wp_frmt_entry_cleanup_queue (entry_id)
+            VALUES (NEW.entry_id);
+
+        END IF;
+
+    END IF;
+END
+
+
+
+https://drive.google.com/file/d/1RWw-sDy2AvjDy9YdAHYZod17fZ6vAD2V/view?usp=drive_link
+https://drive.google.com/file/d/15aeYYtChsf1vYDHFD2042INV4wq_fCKY/view?usp=drive_link 
+
+trg_accumulate_point
