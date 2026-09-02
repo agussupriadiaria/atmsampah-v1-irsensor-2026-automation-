@@ -24,14 +24,45 @@ pilah_audit_log + pilah_rate_limit + wp_usermeta (sync)
 
 * form id di forminator id nya sudah tercatat di plugin pilah plugin. jadi tidak bisa ganti2 id sembarangan
 
+////////////////// EDIT POINT METADATA USER EXISTING //////////////////
+Query 1: Buat di pilah_point
+sql
+INSERT INTO pilah_point (user_id, balance, version, updated_at)
+VALUES (85, 0, 0, NOW());
 
+👉 Ganti 85 dengan User ID Anda
+
+Query 2: Buat di wp_usermeta
+sql
+INSERT INTO wp_usermeta (user_id, meta_key, meta_value)
+VALUES (85, 'pilah_balance', '0');
+
+👉 Ganti 85 dengan User ID Anda
+
+Query 3: Verifikasi (Cek keduanya ada)
+sql
+SELECT * FROM pilah_point WHERE user_id = 85;
+SELECT * FROM wp_usermeta WHERE user_id = 85 AND meta_key = 'pilah_balance';
+
+👉 Ganti 85 dengan User ID Anda - harus ada muncul 2 row
+
+✅ Testing
+Login sebagai user (User ID 85)
+Submit form Topup dengan TID unik (misal: TEST-001) dan amount 50
+Cek database:
+sql
+   SELECT * FROM pilah_point WHERE user_id = 85;  -- balance harus jadi 50
+   SELECT * FROM pilah_transaction WHERE user_id = 85;  -- harus ada 1 entry
+Cek frontend: Refresh profile → harus tampil "Your Point: 50"
+🎯 Result
+✅ Sukses jika:
+- pilah_point balance berubah dari 0 → 50
+- wp_usermeta meta_value berubah dari 0 → 50
+- pilah_transaction ada entry baru
+- Frontend tampil point yang benar
 
 
 ////////////////// EDIT POINT USER DENGAN LOG //////////////////
--- =====================================================
--- FULL PROPER DENGAN TRANSACTION
--- =====================================================
-
 START TRANSACTION;  ← MULAI TRANSACTION
 
 -- STEP 1: Insert ke pilah_transaction
